@@ -17,6 +17,8 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode, ChatAction
 
+import speech_recognition as sr
+
 import config
 import database
 import chatgpt
@@ -141,6 +143,72 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         # answer has invalid characters, so we send it without parse_mode
         await update.message.reply_text(answer)
 
+async def voice_handle(update: Update, context: CallbackContext, message=None, use_new_dialog_timeout=True):
+
+    await register_user_if_not_exists(update, context, update.message.from_user)
+    user_id = update.message.from_user.id
+
+    # new dialog timeout
+    if use_new_dialog_timeout:
+        if (datetime.now() - db.get_user_attribute(user_id, "last_interaction")).seconds > config.new_dialog_timeout:
+            db.start_new_dialog(user_id)
+            await update.message.reply_text("Starting new dialog due to timeout ✅")
+    db.set_user_attribute(user_id, "last_interaction", datetime.now())
+
+    # send typing action
+    await update.message.chat.send_action(action="typing")
+
+    try:
+        voice = update.message.voice
+        file_id = voice.file_id
+        file = context.bot.get_file(file_id)
+        file.download('telegram_voice_file.wav')
+
+        # initialize the recognizer 
+        r = sr.Recognizer() 
+        with sr.AudioFile('telegram_voice_file.wav') as source:
+            # listen for the data (load audio to memory) 
+            audio_data = r.record(source) 
+            # recognize (convert from speech to text) 
+            text = r.recognize_google(audio_data) 
+            # 
+            answer, prompt, n_used_tokens, n_first_dialog_messages_removed = chatgpt.ChatGPT().send_message(
+                message,
+                dialog_messages=db.get_dialog_messages(user_id, dialog_id=None),
+                chat_mode=db.get_user_attribute(user_id, "current_chat_mode"),
+            )
+
+            # update user data
+            new_dialog_message = {"user": message, "bot": answer, "date": datetime.now()}
+            db.set_dialog_messages(
+                user_id,
+                db.get_dialog_messages(user_id, dialog_id=None) + [new_dialog_message],
+                dialog_id=None
+            )
+
+            db.set_user_attribute(user_id, "n_used_tokens", n_used_tokens + db.get_user_attribute(user_id, "n_used_tokens"))
+
+
+    except Exception as e:
+        error_text = f"Something went wrong during completion. Reason: {e}"
+        logger.error(error_text)
+        await update.message.reply_text(error_text)
+        return
+
+    # send message if some messages were removed from the context
+    if n_first_dialog_messages_removed > 0:
+        if n_first_dialog_messages_removed == 1:
+            text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context.\n Send /new command to start new dialog"
+        else:
+            text = f"✍️ <i>Note:</i> Your current dialog is too long, so <b>{n_first_dialog_messages_removed} first messages</b> were removed from the context.\n Send /new command to start new dialog"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+    try:
+        await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
+    except telegram.error.BadRequest:
+        # answer has invalid characters, so we send it without parse_mode
+        await update.message.reply_text(answer)
+
 
 async def new_dialog_handle(update: Update, context: CallbackContext):
     await register_user_if_not_exists(update, context, update.message.from_user)
@@ -241,6 +309,7 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("help", help_handle, filters=user_filter))
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & user_filter, message_handle))
+    application.add_handler(MessageHandler(filters.VOICE & user_filter, voice_handle))
     application.add_handler(CommandHandler("retry", retry_handle, filters=user_filter))
     application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
     

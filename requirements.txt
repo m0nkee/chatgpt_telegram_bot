@@ -3,3 +3,4 @@ openai>=0.26.1
 PyYAML==6.0
 pymongo==4.3.3
 python-dotenv==0.21.0
+SpeechRecognition==3.9.0
