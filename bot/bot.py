@@ -108,7 +108,8 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     try:
         message = message or update.message.text
 
-        answer, prompt, n_used_tokens, n_first_dialog_messages_removed = chatgpt.ChatGPT().send_message(
+        chatgpt_instance = chatgpt.ChatGPT(use_chatgpt_api=config.use_chatgpt_api)
+        answer, n_used_tokens, n_first_dialog_messages_removed = chatgpt_instance.send_message(
             message,
             dialog_messages=db.get_dialog_messages(user_id, dialog_id=None),
             chat_mode=db.get_user_attribute(user_id, "current_chat_mode"),
@@ -268,10 +269,12 @@ async def show_balance_handle(update: Update, context: CallbackContext):
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
     n_used_tokens = db.get_user_attribute(user_id, "n_used_tokens")
-    n_spent_dollars = n_used_tokens * (0.01 / 1000)
+
+    price = 0.002 if config.use_chatgpt_api else 0.02
+    n_spent_dollars = n_used_tokens * (price / 1000)
 
     text = f"You spent <b>{n_spent_dollars:.03f}$</b>\n"
-    text += f"You used <b>{n_used_tokens}</b> tokens <i>(price: 0.01$ per 1000 tokens)</i>\n"
+    text += f"You used <b>{n_used_tokens}</b> tokens <i>(price: {price}$ per 1000 tokens)</i>\n"
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
@@ -284,19 +287,25 @@ async def edited_message_handle(update: Update, context: CallbackContext):
 async def error_handle(update: Update, context: CallbackContext) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
-    # collect error message
-    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
-    tb_string = "".join(tb_list)[:2000]
-    update_str = update.to_dict() if isinstance(update, Update) else str(update)
-    message = (
-        f"An exception was raised while handling an update\n"
-        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
-        "</pre>\n\n"
-        f"<pre>{html.escape(tb_string)}</pre>"
-    )
+    try:
+        # collect error message
+        tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+        tb_string = "".join(tb_list)[:2000]
+        update_str = update.to_dict() if isinstance(update, Update) else str(update)
+        message = (
+            f"An exception was raised while handling an update\n"
+            f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
+            "</pre>\n\n"
+            f"<pre>{html.escape(tb_string)}</pre>"
+        )
 
-    await context.bot.send_message(update.effective_chat.id, message, parse_mode=ParseMode.HTML)
-
+        # split text into multiple messages due to 4096 character limit
+        message_chunk_size = 4000
+        message_chunks = [message[i:i + message_chunk_size] for i in range(0, len(message), message_chunk_size)]
+        for message_chunk in message_chunks:
+            await context.bot.send_message(update.effective_chat.id, message_chunk, parse_mode=ParseMode.HTML)
+    except:
+        await context.bot.send_message(update.effective_chat.id, "Some error in error handler")
 
 def run_bot() -> None:
     application = (
