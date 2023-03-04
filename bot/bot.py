@@ -22,6 +22,7 @@ import speech_recognition as sr
 import config
 import database
 import chatgpt
+import soundfile
 
 
 # setup
@@ -161,12 +162,17 @@ async def voice_handle(update: Update, context: CallbackContext, message=None, u
     try:
         voice = update.message.voice
         file_id = voice.file_id
-        file = context.bot.get_file(file_id)
-        file.download('telegram_voice_file.wav')
+        file = await context.bot.get_file(file_id)
+        await file.download('/tmp/telegram_voice_file.ogg')
+
+        # Convert the audio file to a supported format
+        # subprocess.run(["ffmpeg", "-i", "/tmp/telegram_voice_file.ogg", "/tmp/telegram_voice_file.wav"])
+        data, samplerate = soundfile.read('/tmp/telegram_voice_file.ogg')
+        soundfile.write('/tmp/telegram_voice_file.wav', data, samplerate)
 
         # initialize the recognizer 
         r = sr.Recognizer() 
-        with sr.AudioFile('telegram_voice_file.wav') as source:
+        with sr.AudioFile('/tmp/telegram_voice_file.wav') as source:
             # listen for the data (load audio to memory) 
             audio_data = r.record(source) 
             # recognize (convert from speech to text) 

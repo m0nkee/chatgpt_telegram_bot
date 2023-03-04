@@ -4,3 +4,4 @@ PyYAML==6.0
 pymongo==4.3.3
 python-dotenv==0.21.0
 SpeechRecognition==3.9.0
+# ffmpeg-python==0.2.0
