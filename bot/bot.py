@@ -163,7 +163,7 @@ async def voice_handle(update: Update, context: CallbackContext, message=None, u
     try:
         voice = update.message.voice
         file_id = voice.file_id
-        file = await context.bot.get_file(file_id)
+        file = await context.bot.getFile(file_id)
         await file.download('/tmp/telegram_voice_file.ogg')
 
         # Convert the audio file to a supported format

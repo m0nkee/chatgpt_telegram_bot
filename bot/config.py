@@ -17,4 +17,4 @@ openai_api_key = config_yaml["openai_api_key"]
 use_chatgpt_api = config_yaml.get("use_chatgpt_api", True)
 allowed_telegram_usernames = config_yaml["allowed_telegram_usernames"]
 new_dialog_timeout = config_yaml["new_dialog_timeout"]
-mongodb_uri = f"mongodb://127.0.0.1:{config_env['MONGODB_PORT']}"
+mongodb_uri = f"mongodb://config_env['MONGODB_HOST']:{config_env['MONGODB_PORT']}"
