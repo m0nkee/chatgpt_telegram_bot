@@ -29,7 +29,7 @@ services:
     depends_on:
       - mongo
 
-    # command: python3 bot/bot.py
+    command: python3 bot/bot.py
 
     networks:
       botnet:
