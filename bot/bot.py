@@ -178,7 +178,7 @@ async def voice_handle(update: Update, context: CallbackContext, message=None, u
             audio_data = r.record(source) 
             # recognize (convert from speech to text) 
             text = r.recognize_google(audio_data) 
-            # 
+            
             answer, prompt, n_used_tokens, n_first_dialog_messages_removed = chatgpt.ChatGPT().send_message(
                 message,
                 dialog_messages=db.get_dialog_messages(user_id, dialog_id=None),
@@ -211,6 +211,7 @@ async def voice_handle(update: Update, context: CallbackContext, message=None, u
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
     try:
+        await update.message.reply_text("Q: {}".format(text))
         await update.message.reply_text(answer, parse_mode=ParseMode.HTML)
     except telegram.error.BadRequest:
         # answer has invalid characters, so we send it without parse_mode
